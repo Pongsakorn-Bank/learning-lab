@@ -1,0 +1,6 @@
+facebook-business
+pydantic
+pandas
+python-dotenv
+google-cloud-bigquery
+ipykernel
