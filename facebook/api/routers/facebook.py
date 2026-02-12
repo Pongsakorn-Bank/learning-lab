@@ -1,10 +1,11 @@
+from pygments.token import Literal
 from fastapi import Query
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 import os
 from dotenv import load_dotenv
-from typing import Optional, List
+from typing import Optional, List, Literal
 from enum import Enum
 import logging
 import time
@@ -16,6 +17,12 @@ from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.leadgenform import LeadgenForm
 from facebook_business.adobjects.lead import Lead
 from facebook_business.adobjects.adspixel import AdsPixel
+
+from facebook_business.adobjects.serverside.action_source import ActionSource
+from facebook_business.adobjects.serverside.custom_data import CustomData
+from facebook_business.adobjects.serverside.event import Event
+from facebook_business.adobjects.serverside.event_request import EventRequest
+from facebook_business.adobjects.serverside.user_data import UserData
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,7 +58,7 @@ class ActionSource(str, Enum):
     SYSTEM_GENERATED = "system_generated"
     OTHER = "other"
 
-class UserData(BaseModel):
+class UserDataModel(BaseModel):
     # Meta requires these to be hashed (SHA256)
     em: Optional[List[str]] = None  # Email
     ph: Optional[List[str]] = None  # Phone
@@ -92,10 +99,10 @@ class CustomData(BaseModel):
 class ServerEvent(BaseModel):
     event_name: str
     event_time: int = Field(default_factory=lambda: int(time.time()))
-    action_source: ActionSource = ActionSource.WEBSITE
+    action_source: Literal['system_generated', 'email', 'website', 'app', 'phone_call', 'chat', 'physical_store', 'business_messaging', 'other']
     event_id: Optional[str] = None
     event_source_url: Optional[str] = None
-    user_data: UserData
+    user_data: UserDataModel
     custom_data: Optional[CustomData] = None
 
 class FacebookCAPIPayload(BaseModel):
@@ -110,25 +117,25 @@ def hash_data(value):
         return None
     return hashlib.sha256(str(value).strip().lower().encode('utf-8')).hexdigest()
 
-def prepare_fb_payload(row):
+def prepare_fb_payload(row: ServerEvent):
     # Normalize and hash phone
     # Remove all symbols and non-numeric characters using regex
-    clean_phone = re.sub(r'\D', '', str(row['phone']))
-    hashed_phone = hash_data(clean_phone)
+    clean_phone = re.sub(r'\D', '', str(row.user_data.ph))
+    # hashed_phone = hash_data(clean_phone)
     
-    payload = {
-        "event_name": row['event_name'],
-        "event_time": int(row['event_time']),
-        "action_source": "system_generated", # or "physical_store" for offline
-        "user_data": {
-            "ph": [hashed_phone],
-            "lead_id": row['lead_id'] # lead_id does NOT need hashing
-        },
-        "custom_data": {
-            "currency": row['currency'],
-            "value": float(row['value'])
-        }
-    }
+    payload = Event(
+        event_name=row.event_name,
+        event_time=int(row.event_time),
+        user_data=UserData(
+            phones=[clean_phone],
+            lead_id=[row.user_data.lead_id]
+        ),
+        custom_data=CustomData(
+            currency=row.custom_data.currency,
+            value=float(row.custom_data.value)
+        ),
+        action_source=row.action_source
+    )
     return payload
 
 #set up env
@@ -184,7 +191,8 @@ def leadgen(
 @router.get("/conversion_api/{pixel_id}/events")
 def conversion_api(
     pixel_id: str,
-    events: List[ServerEvent]
+    events: List[ServerEvent],
+    test_event_code: str = None
 ):
     FB_ACCESS_TOKEN = os.getenv('FB_TOKEN')
     if FB_ACCESS_TOKEN:
@@ -194,14 +202,14 @@ def conversion_api(
         logger.error("Facebook API not initialized.")
         raise HTTPException(status_code=500, detail="Facebook API not initialized")
     try:
-        pixel = AdsPixel(pixel_id)
-        pixel.create_event(
-            fields=[],
-            params={
-                'data': events,
-                'test_event_code': 'TEST_CODE'
-            }
+        events_formated = [prepare_fb_payload(row) for row in events]
+        event_request = EventRequest(
+            events=events_formated,
+            pixel_id=pixel_id,
+            test_event_code = test_event_code
         )
+        event_response = event_request.execute()
+        logger.info(event_response)
         logger.info("Events created successfully!")
         return JSONResponse(content={"message": "Events created successfully!"})
     except Exception as e:
