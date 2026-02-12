@@ -1,0 +1,6 @@
+facebook-business
+google-cloud-bigquery
+pandas
+python-dotenv
+requests
+db-dtypes

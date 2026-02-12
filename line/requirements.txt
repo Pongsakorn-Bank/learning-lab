@@ -1,2 +1,7 @@
-requests
-ipykernel
+fastapi
+uvicorn
+line-bot-sdk
+python-dotenv
+python-multipart
+pyngrok
+google-generativeai
