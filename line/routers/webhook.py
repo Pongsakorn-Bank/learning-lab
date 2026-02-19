@@ -11,7 +11,8 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import (
     MessageEvent,
     BeaconEvent,
-    TextMessageContent
+    TextMessageContent,
+    ImageMessageContent
 )
 from services.line_handler import line_service
 import os
@@ -44,23 +45,32 @@ async def callback(request: Request, x_line_signature: str = Header(None)):
     
     try:
         handler.handle(body.decode("utf-8"), x_line_signature)
+        print(body.decode("utf-8"))
     except InvalidSignatureError:
         raise HTTPException(status_code=400, detail="Invalid Signature")
 
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessageContent)
-def handle_message(event):
+def handle_text_message(event):
     """
     This function handles Text Messages sent by users.
     It delegates the logic to LineService.
     """
     line_service.handle_text_message(event)
 
+@handler.add(MessageEvent, message=ImageMessageContent)
+def handle_image_message(event):
+    """
+    This function handles Image Messages sent by users.
+    It delegates the logic to LineService.
+    """
+    line_service.handle_image_message(event)
+
 @handler.add(BeaconEvent)
 def handle_beacon(event):
     """
-    This function handles Beacon Messages sent by users.
+    This function handles Beacon Events sent by users.
     It delegates the logic to LineService.
     """
     line_service.handle_beacon(event)

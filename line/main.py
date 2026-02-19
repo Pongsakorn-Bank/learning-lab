@@ -45,4 +45,4 @@ if __name__ == "__main__":
     print(f" * ngrok tunnel available at {public_url}")
     print(f" * LINE Webhook URL should be: {public_url}/webhook/callback")
 
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)

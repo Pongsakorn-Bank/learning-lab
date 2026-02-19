@@ -72,6 +72,25 @@ class LineService:
                     messages=[TextMessage(text=reply_text)]
                 )
             )
+    
+    def handle_image_message(self, event):
+        """
+        Logic for handling image messages.
+        You can expand this to include AI, database lookups, etc.
+        """
+        user_profile = self.get_user_profile(event.source.user_id)
+
+        with ApiClient(self.configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            reply_text = f"This is image message: {user_profile.display_name}"
+
+            # 3. Reply to user
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+            )
         
     def handle_beacon(self, event):
         """
